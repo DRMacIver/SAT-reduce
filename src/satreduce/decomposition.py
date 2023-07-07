@@ -1,9 +1,14 @@
-import attrs
-from satreduce.booleanequivalence import BooleanEquivalence, Inconsistency
-from networkx import DiGraph, strongly_connected_components
-from typing import Sequence
 from copy import deepcopy
+from typing import Sequence
+
+import attrs
+from networkx import DiGraph
+from networkx import strongly_connected_components
+
+from satreduce.booleanequivalence import BooleanEquivalence
+from satreduce.booleanequivalence import Inconsistency
 from satreduce.minisat import find_solution
+
 
 @attrs.define
 class ReducedSatProblem:
@@ -27,13 +32,13 @@ class ReducedSatProblem:
         )
         result.__reduce()
         return result
-    
+
     def with_extra_clauses(self, clauses):
         result = deepcopy(self)
         result.core = result.core + tuple(map(tuple, clauses))
         result.__reduce()
         return result
-    
+
     def forced_value(self, literal):
         literal = self.merge_table.find(literal)
         if literal < 0:
@@ -43,15 +48,15 @@ class ReducedSatProblem:
         else:
             return self.forced[literal]
 
-
-    
     def __force(self, literal):
         literal = self.merge_table.find(literal)
         variable = abs(literal)
         value = literal > 0
         if variable in self.forced:
             if self.forced[variable] != value:
-                raise Inconsistency(f"Attempted to force {variable}={value} but it is already {self.forced[variable]}")
+                raise Inconsistency(
+                    f"Attempted to force {variable}={value} but it is already {self.forced[variable]}"
+                )
         else:
             self.changed = True
             self.forced[variable] = value
@@ -71,7 +76,7 @@ class ReducedSatProblem:
                     self.__force(c)
                 else:
                     self.__force(-c)
-    
+
     def __reduce(self):
         prev = None
         while prev != self.core or self.changed:
@@ -100,7 +105,7 @@ class ReducedSatProblem:
                     continue
                 if not new_clause:
                     raise Inconsistency(f"All literals in {clause} are unsatisfied")
-                    
+
                 clause = tuple(sorted(set(map(self.merge_table.find, new_clause))))
                 if len(set(map(abs, clause))) < len(clause):
                     continue
@@ -117,10 +122,14 @@ class ReducedSatProblem:
             self.core = tuple(sorted(new_core, key=lambda s: (len(s), s)))
             for component in strongly_connected_components(self.implications):
                 if len(component) > 1:
-                    forced_values = {self.forced.get(self.merge_table.find(c)) for c in component}
+                    forced_values = {
+                        self.forced.get(self.merge_table.find(c)) for c in component
+                    }
                     forced_values.discard(None)
                     if len(forced_values) > 1:
-                        raise Inconsistency(f"Attempted to merge {component} with inconsistent assigned values")
+                        raise Inconsistency(
+                            f"Attempted to merge {component} with inconsistent assigned values"
+                        )
 
                     target = None
                     for c in component:
@@ -129,7 +138,11 @@ class ReducedSatProblem:
                         else:
                             self.__merge(target, c)
 
-        self.free = {c for c in self.free if self.merge_table.find(c) == c and c not in self.forced}
+        self.free = {
+            c
+            for c in self.free
+            if self.merge_table.find(c) == c and c not in self.forced
+        }
         for f in self.free:
             self.implications.add_node(f)
             self.implications.add_node(-f)

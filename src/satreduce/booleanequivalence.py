@@ -12,7 +12,7 @@ class NegatingTable:
             return -self.__table[-key]
         else:
             return self.__table[key]
-        
+
     def __setitem__(self, key, value):
         if key == 0:
             raise ValueError("Accessed 0 key")
@@ -88,12 +88,12 @@ class BooleanEquivalence(object):
 
     def __repr__(self):
         return f"BooleanEquivalence({list(self.partitions())})"
-    
+
     def __copy__(self):
         result = BooleanEquivalence()
         result.table = self.table.__copy__()
         return result
-    
+
     def __deepcopy__(self, *args, **kwargs):
         return self.__copy__()
 

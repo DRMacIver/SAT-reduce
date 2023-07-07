@@ -1,6 +1,7 @@
+import hashlib
 from collections import defaultdict
 from functools import wraps
-import hashlib
+
 from satreduce.booleanequivalence import Inconsistency
 from satreduce.decomposition import ReducedSatProblem
 
@@ -10,7 +11,7 @@ def shrink_sat(clauses, test_function):
     shrinker.reduce()
     return shrinker.current
 
-    
+
 def reduction_pass(fn):
     @wraps(fn)
     def accept(self):
@@ -19,7 +20,9 @@ def reduction_pass(fn):
         fn(self)
         if prev is not self.current:
             self.house_keeping_shrinks()
+
     return accept
+
 
 class SATShrinker:
     def __init__(self, starting_point, test_function, debug=False):
@@ -65,7 +68,7 @@ class SATShrinker:
         components = list(merges.partitions())
         if len(components) <= 1:
             return
-        
+
         components.sort(key=len)
 
         for component in components:
@@ -81,7 +84,7 @@ class SATShrinker:
             variables = sorted({abs(l) for c in self.current for l in c})
             if i >= len(variables):
                 return
-            
+
             target = variables[i]
             self.debug("Deleting", target)
 
@@ -102,9 +105,10 @@ class SATShrinker:
         i = 0
         while i < len(self.current):
             initial = self.current
-            find_integer(lambda k: i + k <= len(initial) and self.test_function(
-                initial[:i] + initial[i + k:]
-            ))
+            find_integer(
+                lambda k: i + k <= len(initial)
+                and self.test_function(initial[:i] + initial[i + k :])
+            )
             i += 1
 
     @reduction_pass
@@ -118,7 +122,7 @@ class SATShrinker:
                 j = i + 1
             if j >= len(variables):
                 return
-            
+
             target = variables[i]
             to_replace = variables[j]
 
@@ -165,12 +169,14 @@ class SATShrinker:
         except KeyError:
             result = self.__test_function(clauses)
             if result and sort_key(clauses) < sort_key(self.current):
-                self.debug(f"Shrunk to {len(clauses)} clauses over {len(calc_variables(clauses))} variables")
+                self.debug(
+                    f"Shrunk to {len(clauses)} clauses over {len(calc_variables(clauses))} variables"
+                )
                 self.current = clauses
         for key in keys:
             self.__cache[key] = result
         return result
-    
+
     def renumber_variables(self):
         renumbering = {}
 
@@ -187,45 +193,42 @@ class SATShrinker:
             result = len(renumbering) + 1
             renumbering[l] = result
             return result
-        
-        renumbered = [
-            [renumber(l) for l in c]
-            for c in self.current
-        ]
-        
+
+        renumbered = [[renumber(l) for l in c] for c in self.current]
+
         self.test_function(renumbered)
 
     def canonicalise(self, clauses):
-        return tuple(sorted(
-            {tuple(sorted(set(clause))) for clause in clauses},
-            key=lambda s: (len(s), s))
+        return tuple(
+            sorted(
+                {tuple(sorted(set(clause))) for clause in clauses},
+                key=lambda s: (len(s), s),
+            )
         )
+
 
 def calc_variables(clauses):
     return {abs(l) for c in clauses for l in c}
 
+
 def sort_key(clauses):
     n_variables = len(calc_variables(clauses))
     n_clauses = len(clauses)
-    average_clause_length = (sum([len(c) for c in clauses]) / n_clauses) if n_clauses > 0 else 0.0
-
-    shrink_clauses = [
-        tuple((abs(l), l < 0) for l in c)
-        for c in clauses
-    ]
-
-    return (
-        n_variables,
-        n_clauses,
-        average_clause_length,
-        shrink_clauses
+    average_clause_length = (
+        (sum([len(c) for c in clauses]) / n_clauses) if n_clauses > 0 else 0.0
     )
+
+    shrink_clauses = [tuple((abs(l), l < 0) for l in c) for c in clauses]
+
+    return (n_variables, n_clauses, average_clause_length, shrink_clauses)
+
 
 def cache_key(clauses):
     n = len(clauses)
     r = repr(clauses)
-    hex = hashlib.sha1(r.encode('utf-8')).hexdigest()[:8]
-    return f'{n}:{len(r)}:{hex}'
+    hex = hashlib.sha1(r.encode("utf-8")).hexdigest()[:8]
+    return f"{n}:{len(r)}:{hex}"
+
 
 def find_integer(f):
     """Finds a (hopefully large) integer n such that f(n) is True and f(n + 1)

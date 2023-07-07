@@ -12,17 +12,16 @@ def is_satisfiable(clauses):
 
     n_variables = len({abs(v) for clause in clauses for v in clause})
 
-    with open(sat_file, 'w') as o:
+    with open(sat_file, "w") as o:
         o.write("p cnf %d %d\n" % (n_variables, len(clauses)))
         for c in clauses:
             o.write(" ".join(map(str, tuple(c) + (0,))) + "\n")
     try:
         result = subprocess.run(
-            ["minisat", sat_file],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            ["minisat", sat_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         ).returncode
         assert result in (10, 20)
-        return (result == 10)
+        return result == 10
     finally:
         os.unlink(sat_file)
 
@@ -39,14 +38,15 @@ def find_solution(clauses):
 
     n_variables = len({abs(v) for clause in clauses for v in clause})
 
-    with open(sat_file, 'w') as o:
+    with open(sat_file, "w") as o:
         o.write("p cnf %d %d\n" % (n_variables, len(clauses)))
         for c in clauses:
             o.write(" ".join(map(str, tuple(c) + (0,))) + "\n")
     try:
         result = subprocess.run(
             ["minisat", sat_file, out_file],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         ).returncode
         assert result in (10, 20)
         if result == 20:
