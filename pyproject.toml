@@ -16,8 +16,9 @@ classifiers = [
 Changelog = "https://github.com/DRMacIver/satreduce/releases"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.10"
 click = ">=8.0.1"
+networkx = "^3.1"
 
 [tool.poetry.dev-dependencies]
 Pygments = ">=2.10.0"
