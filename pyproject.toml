@@ -49,6 +49,9 @@ myst-parser = {version = ">=0.16.1"}
 [tool.poetry.scripts]
 satreduce = "satreduce.__main__:main"
 
+[tool.poetry.group.dev.dependencies]
+hypothesis = "^6.80.1"
+
 [tool.coverage.paths]
 source = ["src", "*/site-packages"]
 tests = ["tests", "*/tests"]

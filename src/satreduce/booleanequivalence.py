@@ -28,7 +28,7 @@ class NegatingTable:
 
     def __copy__(self):
         result = NegatingTable()
-        result.__tabkle = dict(self.__table)
+        result.__table = dict(self.__table)
         return result
 
 
@@ -91,8 +91,11 @@ class BooleanEquivalence(object):
     
     def __copy__(self):
         result = BooleanEquivalence()
-        result.__table = self.__table.__copy__()
+        result.table = self.table.__copy__()
         return result
+    
+    def __deepcopy__(self, *args, **kwargs):
+        return self.__copy__()
 
 
 class Inconsistency(Exception):

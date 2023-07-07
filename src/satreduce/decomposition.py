@@ -13,6 +13,8 @@ class ReducedSatProblem:
     core: tuple[tuple[int, ...], ...]
     implications: DiGraph
 
+    changed: bool = False
+
     @classmethod
     def from_sat(cls, problem: Sequence[Sequence[int]]):
         problem = tuple(map(tuple, problem))
@@ -32,11 +34,48 @@ class ReducedSatProblem:
         result.__reduce()
         return result
     
+    def forced_value(self, literal):
+        literal = self.merge_table.find(literal)
+        if literal < 0:
+            result = self.forced_value(-literal)
+            if result is not None:
+                return not result
+        else:
+            return self.forced[literal]
+
+
+    
+    def __force(self, literal):
+        literal = self.merge_table.find(literal)
+        variable = abs(literal)
+        value = literal > 0
+        if variable in self.forced:
+            if self.forced[variable] != value:
+                raise Inconsistency(f"Attempted to force {variable}={value} but it is already {self.forced[variable]}")
+        else:
+            self.changed = True
+            self.forced[variable] = value
+
+    def __merge(self, a, b):
+        a = self.merge_table.find(a)
+        b = self.merge_table.find(b)
+        if a == b:
+            return
+        self.changed = True
+        self.merge_table.merge(a, b)
+
+        for c in a, b:
+            c = abs(c)
+            if c in self.forced:
+                if self.forced[c]:
+                    self.__force(c)
+                else:
+                    self.__force(-c)
+    
     def __reduce(self):
         prev = None
-        changed = True
-        while prev != self.core or changed:
-            changed = False
+        while prev != self.core or self.changed:
+            self.changed = False
             prev = self.core
 
             new_core = set()
@@ -59,18 +98,14 @@ class ReducedSatProblem:
                         new_clause.append(literal)
                 if redundant:
                     continue
+                if not new_clause:
+                    raise Inconsistency(f"All literals in {clause} are unsatisfied")
                     
                 clause = tuple(sorted(set(map(self.merge_table.find, new_clause))))
                 if len(set(map(abs, clause))) < len(clause):
                     continue
                 if len(clause) == 1:
-                    literal, = clause
-                    variable = abs(literal)
-                    value = literal > 0
-                    if variable not in self.forced:
-                        self.forced[variable] = value
-                    elif value != self.forced[variable]:
-                        raise Inconsistency(f"Forced {variable} = {value} but previously forced to {self.forced[variable]}")
+                    self.__force(*clause)
                     continue
 
                 if len(clause) == 2:
@@ -82,8 +117,17 @@ class ReducedSatProblem:
             self.core = tuple(sorted(new_core, key=lambda s: (len(s), s)))
             for component in strongly_connected_components(self.implications):
                 if len(component) > 1:
-                    self.merge_table.merge_all(component)
-                    changed = True
+                    forced_values = {self.forced.get(self.merge_table.find(c)) for c in component}
+                    forced_values.discard(None)
+                    if len(forced_values) > 1:
+                        raise Inconsistency(f"Attempted to merge {component} with inconsistent assigned values")
+
+                    target = None
+                    for c in component:
+                        if target is None:
+                            target = c
+                        else:
+                            self.__merge(target, c)
 
         self.free = {c for c in self.free if self.merge_table.find(c) == c and c not in self.forced}
         for f in self.free:

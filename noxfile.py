@@ -157,15 +157,16 @@ def mypy(session: Session) -> None:
         session.run("mypy", f"--python-executable={sys.executable}", "noxfile.py")
 
 
-@session(python=python_versions)
+@session(python=python_versions, reuse_venv=True)
 def tests(session: Session) -> None:
     """Run the test suite."""
     session.install(".")
+    session.run_always("poetry", "install", external=True)
     session.install("coverage[toml]", "pytest", "pygments")
     try:
         session.run("coverage", "run", "--parallel", "-m", "pytest", *session.posargs)
     finally:
-        if session.interactive:
+        if session.interactive and not session.posargs:
             session.notify("coverage", posargs=[])
 
 
