@@ -46,7 +46,7 @@ class ReducedSatProblem:
             if result is not None:
                 return not result
         else:
-            return self.forced[literal]
+            return self.forced.get(literal)
 
     def __force(self, literal):
         literal = self.merge_table.find(literal)

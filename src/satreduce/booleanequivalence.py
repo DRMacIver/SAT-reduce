@@ -39,10 +39,8 @@ class BooleanEquivalence(object):
     in a singleton set, and calls to merge will
     link two sets so they are in the same partition."""
 
-    def __init__(self, partitions=()):
+    def __init__(self):
         self.table = NegatingTable()
-        for cls in partitions:
-            self.merge_all(cls)
 
     def find(self, value):
         """Find a canonical representative for ``value``
@@ -71,14 +69,6 @@ class BooleanEquivalence(object):
         if abs(left) > abs(right):
             right, left = left, right
         self.table[right] = left
-
-    def merge_all(self, values):
-        value = None
-        for i, v in enumerate(values):
-            if i == 0:
-                value = v
-            else:
-                self.merge(v, value)
 
     def partitions(self):
         results = defaultdict(set)

@@ -7,6 +7,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import satreduce.minisat as ms
+from satreduce.reducer import SATShrinker
 from satreduce.reducer import shrink_sat
 from tests.sat_strategies import has_unique_solution
 from tests.sat_strategies import sat_clauses
@@ -64,3 +65,44 @@ def test_reduces_unique_satisfiable_to_trivial(unique_sat):
     assert test(shrunk)
 
     assert shrunk == ((1,),)
+
+
+def test_does_not_print_if_debug_disabled(capsys):
+    reducer = SATShrinker([[1]], lambda x: True)
+
+    reducer.debug("hi")
+
+    captured = capsys.readouterr()
+
+    assert captured.out == ""
+
+
+def test_debug_prints_if_debug_enabled(capsys):
+    reducer = SATShrinker([[1]], lambda x: True, debug=True)
+
+    reducer.debug("hi")
+
+    captured = capsys.readouterr()
+
+    assert captured.out == "hi\n"
+
+
+def test_can_reduce_to_a_component():
+    reducer = SATShrinker([[1, 2], [3, 4, 5]], lambda x: len(x) >= 1)
+
+    reducer.move_to_components()
+
+    assert reducer.current == ((1, 2),)
+
+
+def test_can_reduce_to_all_components():
+    reducer = SATShrinker([[1, 2], [3, 4, 5]], lambda x: any(3 in y for y in x))
+
+    reducer.move_to_components()
+
+    assert reducer.current == ((3, 4, 5),)
+
+
+def test_raises_if_initial_invalid():
+    with pytest.raises(ValueError):
+        shrink_sat([[1]], lambda x: False)
