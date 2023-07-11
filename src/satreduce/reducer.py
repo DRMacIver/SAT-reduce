@@ -89,20 +89,30 @@ class SATShrinker:
             if i >= len(variables):
                 return
 
-            target = variables[i]
-            self.debug("Deleting", target)
+            current = self.current
 
-            new_clauses = []
-            for c in self.current:
-                c = set(c)
-                c.discard(target)
-                c.discard(-target)
-                if c:
-                    new_clauses.append(c)
-            if self.test_function(new_clauses):
-                self.replace_with_core()
-            else:
-                i += 1
+            def can_delete(k):
+                if i + k > len(variables):
+                    return False
+                to_delete = set(variables[i : i + k])
+                to_delete = to_delete | {-v for v in to_delete}
+
+                if k == 1:
+                    self.debug("Deleting", variables[i])
+                else:
+                    self.debug(
+                        f"Deleting {variables[i]} through {variables[i + k - 1]}"
+                    )
+
+                new_clauses = []
+                for c in self.current:
+                    c = set(c) - to_delete
+                    if c:
+                        new_clauses.append(tuple(c))
+                return self.test_function(new_clauses)
+
+            find_integer(can_delete)
+            i += 1
 
     @reduction_pass
     def delete_clauses(self):
