@@ -30,9 +30,13 @@ class SATShrinker:
         self.__test_function = test_function
         self.__cache = {}
         self.__debug = debug
+        self.__on_reduce_callbacks = []
 
         if not self.test_function(self.current):
             raise ValueError("Initial argument does not satisfy test.")
+
+    def on_reduce(self, fn):
+        self.__on_reduce_callbacks.append(fn)
 
     def debug(self, *args, **kwargs):
         if self.__debug:
@@ -173,6 +177,8 @@ class SATShrinker:
                     f"Shrunk to {len(clauses)} clauses over {len(calc_variables(clauses))} variables"
                 )
                 self.current = clauses
+                for f in self.__on_reduce_callbacks:
+                    f(clauses)
         for key in keys:
             self.__cache[key] = result
         return result

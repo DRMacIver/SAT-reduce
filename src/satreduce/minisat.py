@@ -2,6 +2,8 @@ import os
 import subprocess
 import tempfile
 
+from satreduce.dimacscnf import clauses_to_dimacs
+
 
 def is_satisfiable(clauses):
     if not all(clauses):
@@ -13,9 +15,7 @@ def is_satisfiable(clauses):
     n_variables = len({abs(v) for clause in clauses for v in clause})
 
     with open(sat_file, "w") as o:
-        o.write("p cnf %d %d\n" % (n_variables, len(clauses)))
-        for c in clauses:
-            o.write(" ".join(map(str, tuple(c) + (0,))) + "\n")
+        o.write(clauses_to_dimacs(clauses))
     try:
         result = subprocess.run(
             ["minisat", sat_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -39,9 +39,7 @@ def find_solution(clauses):
     n_variables = len({abs(v) for clause in clauses for v in clause})
 
     with open(sat_file, "w") as o:
-        o.write("p cnf %d %d\n" % (n_variables, len(clauses)))
-        for c in clauses:
-            o.write(" ".join(map(str, tuple(c) + (0,))) + "\n")
+        o.write(clauses_to_dimacs(clauses))
     try:
         result = subprocess.run(
             ["minisat", sat_file, out_file],
