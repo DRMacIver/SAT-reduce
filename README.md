@@ -1,73 +1,7 @@
 # SAT-reduce
 
-[![PyPI](https://img.shields.io/pypi/v/satreduce.svg)][pypi_]
-[![Status](https://img.shields.io/pypi/status/satreduce.svg)][status]
-[![Python Version](https://img.shields.io/pypi/pyversions/satreduce)][python version]
-[![License](https://img.shields.io/pypi/l/satreduce)][license]
+SAT-reduce is a domain-specific test-case reducer for SAT problems. That is, given a file in CNF format, and some script that defines a condition that file should satisfy, it will produce a smaller version of that file.
 
-[![Read the documentation at https://satreduce.readthedocs.io/](https://img.shields.io/readthedocs/satreduce/latest.svg?label=Read%20the%20Docs)][read the docs]
-[![Tests](https://github.com/DRMacIver/satreduce/workflows/Tests/badge.svg)][tests]
-[![Codecov](https://codecov.io/gh/DRMacIver/satreduce/branch/main/graph/badge.svg)][codecov]
+It's mostly alpha-quality software written for my own purposes, but also it's probably by far the most effective tool you'll find for that problem because I'm one of only a handful of people who writes this sort of thing, so if that's a thing you want then this is probably your best bet.
 
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)][pre-commit]
-[![Black](https://img.shields.io/badge/code%20style-black-000000.svg)][black]
-
-[pypi_]: https://pypi.org/project/satreduce/
-[status]: https://pypi.org/project/satreduce/
-[python version]: https://pypi.org/project/satreduce
-[read the docs]: https://satreduce.readthedocs.io/
-[tests]: https://github.com/DRMacIver/satreduce/actions?workflow=Tests
-[codecov]: https://app.codecov.io/gh/DRMacIver/satreduce
-[pre-commit]: https://github.com/pre-commit/pre-commit
-[black]: https://github.com/psf/black
-
-## Features
-
-- TODO
-
-## Requirements
-
-- TODO
-
-## Installation
-
-You can install _SAT-reduce_ via [pip] from [PyPI]:
-
-```console
-$ pip install satreduce
-```
-
-## Usage
-
-Please see the [Command-line Reference] for details.
-
-## Contributing
-
-Contributions are very welcome.
-To learn more, see the [Contributor Guide].
-
-## License
-
-Distributed under the terms of the [MIT license][license],
-_SAT-reduce_ is free and open source software.
-
-## Issues
-
-If you encounter any problems,
-please [file an issue] along with a detailed description.
-
-## Credits
-
-This project was generated from [@cjolowicz]'s [Hypermodern Python Cookiecutter] template.
-
-[@cjolowicz]: https://github.com/cjolowicz
-[pypi]: https://pypi.org/
-[hypermodern python cookiecutter]: https://github.com/cjolowicz/cookiecutter-hypermodern-python
-[file an issue]: https://github.com/DRMacIver/satreduce/issues
-[pip]: https://pip.pypa.io/
-
-<!-- github-only -->
-
-[license]: https://github.com/DRMacIver/satreduce/blob/main/LICENSE
-[contributor guide]: https://github.com/DRMacIver/satreduce/blob/main/CONTRIBUTING.md
-[command-line reference]: https://satreduce.readthedocs.io/en/latest/usage.html
+Support level is "best effort and subject to current levels of interest" - please do file any issues you find. I will probably fix them, but I make no guarantees.
