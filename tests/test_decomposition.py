@@ -110,8 +110,19 @@ def test_raises_inconsistency(eg):
         [-1],
     ],
 )
-@settings(max_examples=100)
-@given(unsatisfiable_clauses())
+@example(
+    [
+        [1, -2, -3],
+        [-1, 3, 2],
+        [1, 3, 2],
+        [-1, 3, -2],
+        [1, 3, -2],
+        [1, -3, 2],
+        [-1, -3, 2],
+        [-1, -3, -2],
+    ]
+)
+@given(unsatisfiable_clauses(min_clause_size=3))
 def test_eventually_inconsistent(clauses):
     with pytest.raises(Inconsistency):
         problem = ReducedSatProblem.from_sat(clauses)

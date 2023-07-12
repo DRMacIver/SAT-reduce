@@ -1,13 +1,18 @@
 import hashlib
+from collections import Counter
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from functools import wraps
+from itertools import islice
+from threading import Lock
 
 from satreduce.booleanequivalence import Inconsistency
 from satreduce.decomposition import ReducedSatProblem
 
 
-def shrink_sat(clauses, test_function):
-    shrinker = SATShrinker(clauses, test_function)
+def shrink_sat(clauses, test_function, **kwargs):
+    shrinker = SATShrinker(clauses, test_function, **kwargs)
     shrinker.reduce()
     return shrinker.current
 
@@ -25,12 +30,17 @@ def reduction_pass(fn):
 
 
 class SATShrinker:
-    def __init__(self, starting_point, test_function, debug=False):
-        self.current = self.canonicalise(starting_point)
+    def __init__(self, starting_point, test_function, debug=False, parallelism=1):
+        self.current = canonicalise(starting_point)
         self.__test_function = test_function
         self.__cache = {}
         self.__debug = debug
         self.__on_reduce_callbacks = []
+        self.__parallelism = parallelism
+
+        if parallelism > 1:
+            self.__executor = ThreadPoolExecutor(max_workers=parallelism)
+            self.__lock = Lock()
 
         if not self.test_function(self.current):
             raise ValueError("Initial argument does not satisfy test.")
@@ -47,21 +57,122 @@ class SATShrinker:
         while prev is not self.current:
             prev = self.current
             self.house_keeping_shrinks()
-            self.delete_variables()
             self.delete_clauses()
-            self.merge_variables()
+            self.delete_literals()
+            self.force_literals()
             self.delete_literals_from_clauses()
+            self.merge_variables()
 
     def house_keeping_shrinks(self):
         self.replace_with_core()
         self.move_to_components()
         self.renumber_variables()
 
+    def delete_literals(self):
+        counts = Counter()
+        for clause in self.current:
+            for l in clause:
+                counts[l] += 1
+        literals = sorted(counts, key=counts.__getitem__, reverse=True)
+
+        i = 0
+        while i < len(literals):
+            current = self.current
+
+            def can_delete(i):
+                l = literals[i]
+                attempt = canonicalise([set(c) - {l} for c in current])
+                return attempt != current and self.test_function(attempt)
+
+            try:
+                i = self.find_first(range(i, len(literals)), can_delete) + 1
+            except NotFound:
+                return
+
+    @reduction_pass
+    def force_literals(self):
+        counts = Counter()
+        for clause in self.current:
+            for l in clause:
+                counts[l] += 1
+        literals = sorted(counts, key=counts.__getitem__, reverse=True)
+
+        prev = None
+        problem = None
+
+        for l in literals:
+            if prev != self.current:
+                prev = self.current
+                try:
+                    problem = ReducedSatProblem.from_sat(self.current)
+                except Inconsistency:
+                    return
+            try:
+                forced_l = problem.with_extra_clauses([[l]])
+            except Inconsistency:
+                continue
+
+            self.try_reduced_problem(forced_l)
+
     def replace_with_core(self):
         try:
-            self.test_function(ReducedSatProblem.from_sat(self.current).core)
+            self.try_reduced_problem(ReducedSatProblem.from_sat(self.current))
         except Inconsistency:
             pass
+
+    def try_reduced_problem(self, problem):
+        if self.test_function(problem.core):
+            return
+        variables = {abs(l) for c in self.current for l in c}
+        filled = list(problem.core)
+        for k, v in problem.forced.items():
+            if not v:
+                k = -k
+            filled.append([k])
+        if self.test_function(filled):
+            return
+        for k in variables:
+            k2 = problem.merge_table.find(k)
+            if k2 == k:
+                continue
+            filled.extend(
+                [
+                    [-k, k2],
+                    [-k2, k],
+                ]
+            )
+        self.test_function(filled)
+
+    @contextmanager
+    def locked(self):
+        if self.__parallelism <= 1:
+            yield
+        else:
+            try:
+                self.__lock.acquire()
+                yield
+            finally:
+                self.__lock.release()
+
+    def find_first(self, ls, f):
+        if not ls:
+            raise NotFound()
+        if self.__parallelism <= 1:
+            for x in ls:
+                if f(x):
+                    return x
+            raise NotFound()
+        else:
+            it = iter(ls)
+            chunk_size = 1
+            while True:
+                chunk = list(islice(it, chunk_size))
+                if not chunk:
+                    raise NotFound()
+                for x, b in zip(chunk, self.__executor.map(f, chunk)):
+                    if b:
+                        return x
+                chunk_size *= 2
 
     def move_to_components(self):
         merges = UnionFind()
@@ -82,47 +193,22 @@ class SATShrinker:
                 return
 
     @reduction_pass
-    def delete_variables(self):
-        i = 0
-        while True:
-            variables = sorted({abs(l) for c in self.current for l in c})
-            if i >= len(variables):
-                return
-
-            current = self.current
-
-            def can_delete(k):
-                if i + k > len(variables):
-                    return False
-                to_delete = set(variables[i : i + k])
-                to_delete = to_delete | {-v for v in to_delete}
-
-                if k == 1:
-                    self.debug("Deleting", variables[i])
-                else:
-                    self.debug(
-                        f"Deleting {variables[i]} through {variables[i + k - 1]}"
-                    )
-
-                new_clauses = []
-                for c in self.current:
-                    c = set(c) - to_delete
-                    if c:
-                        new_clauses.append(tuple(c))
-                return self.test_function(new_clauses)
-
-            find_integer(can_delete)
-            i += 1
-
-    @reduction_pass
     def delete_clauses(self):
         i = 0
         while i < len(self.current):
-            initial = self.current
-            find_integer(
-                lambda k: i + k <= len(initial)
-                and self.test_function(initial[:i] + initial[i + k :])
-            )
+            initial = list(reversed(self.current))
+
+            def can_delete(j, k):
+                if j + k > len(initial):
+                    return False
+                return self.test_function(initial[:j] + initial[j + k :])
+
+            try:
+                i = self.find_first(range(i, len(initial)), lambda j: can_delete(j, 1))
+            except NotFound:
+                break
+
+            find_integer(lambda k: can_delete(i, k))
             i += 1
 
     @reduction_pass
@@ -156,18 +242,31 @@ class SATShrinker:
     @reduction_pass
     def delete_literals_from_clauses(self):
         i = 0
-        j = 0
-        while i < len(self.current):
-            clause = self.current[i]
-            if j >= len(clause):
+        while True:
+            current = self.current
+
+            def can_delete_any(i):
+                clause = current[i]
+                if len(clause) <= 1:
+                    return False
                 j = 0
-                i += 1
-                continue
-            attempt = list(self.current)
-            attempt[i] = list(attempt[i])
-            del attempt[i][j]
-            if not self.test_function(attempt):
-                j += 1
+                changed = False
+                while j < len(clause):
+                    attempt = list(current)
+                    attempt[i] = list(clause)
+                    del attempt[i][j]
+                    if self.test_function(attempt):
+                        clause = attempt[i]
+                        changed = True
+                    else:
+                        j += 1
+                return changed
+
+            try:
+                i = self.find_first(range(i, len(current)), can_delete_any)
+            except NotFound:
+                break
+            i += 1
 
     def test_function(self, clauses):
         keys = [cache_key(clauses)]
@@ -176,19 +275,21 @@ class SATShrinker:
         except KeyError:
             pass
 
-        clauses = self.canonicalise(clauses)
+        clauses = canonicalise(clauses)
         keys.append(cache_key(clauses))
         try:
             result = self.__cache[keys[-1]]
         except KeyError:
             result = self.__test_function(clauses)
-            if result and sort_key(clauses) < sort_key(self.current):
-                self.debug(
-                    f"Shrunk to {len(clauses)} clauses over {len(calc_variables(clauses))} variables"
-                )
-                self.current = clauses
-                for f in self.__on_reduce_callbacks:
-                    f(clauses)
+            if result:
+                with self.locked():
+                    if sort_key(clauses) < sort_key(self.current):
+                        self.debug(
+                            f"Shrunk to {len(clauses)} clauses over {len(calc_variables(clauses))} variables"
+                        )
+                        self.current = clauses
+                        for f in self.__on_reduce_callbacks:
+                            f(clauses)
         for key in keys:
             self.__cache[key] = result
         return result
@@ -213,14 +314,6 @@ class SATShrinker:
         renumbered = [[renumber(l) for l in c] for c in self.current]
 
         self.test_function(renumbered)
-
-    def canonicalise(self, clauses):
-        return tuple(
-            sorted(
-                {tuple(sorted(set(clause))) for clause in clauses},
-                key=lambda s: (len(s), s),
-            )
-        )
 
 
 def calc_variables(clauses):
@@ -330,3 +423,16 @@ class UnionFind:
 
     def __repr__(self):
         return f"UnionFind({list(self.partitions())})"
+
+
+class NotFound(Exception):
+    pass
+
+
+def canonicalise(clauses):
+    return tuple(
+        sorted(
+            {tuple(sorted(set(clause))) for clause in clauses},
+            key=lambda s: (len(s), s),
+        )
+    )

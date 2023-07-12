@@ -41,17 +41,20 @@ def signal_group(sp, signal):
 
 def interrupt_wait_and_kill(sp):
     if sp.returncode is None:
-        # In case the subprocess forked. Python might hang if you don't close
-        # all pipes.
-        for pipe in [sp.stdout, sp.stderr, sp.stdin]:
-            if pipe:
-                pipe.close()
-        signal_group(sp, signal.SIGINT)
-        for _ in range(10):
-            if sp.poll() is not None:
-                return
-            time.sleep(0.1)
-        signal_group(sp, signal.SIGKILL)
+        try:
+            # In case the subprocess forked. Python might hang if you don't close
+            # all pipes.
+            for pipe in [sp.stdout, sp.stderr, sp.stdin]:
+                if pipe:
+                    pipe.close()
+            signal_group(sp, signal.SIGINT)
+            for _ in range(10):
+                if sp.poll() is not None:
+                    return
+                time.sleep(0.1)
+            signal_group(sp, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 @click.command(
@@ -87,6 +90,12 @@ returns 0.
         "as failing the test"
     ),
 )
+@click.option(
+    "--parallelism",
+    default=os.cpu_count(),
+    type=click.INT,
+    help="Number of tests to run in parallel.",
+)
 @click.argument("test", callback=validate_command)
 @click.argument(
     "filename",
@@ -99,6 +108,7 @@ def main(
     test,
     timeout,
     seed,
+    parallelism,
 ):
     if debug:
 
@@ -118,10 +128,19 @@ def main(
     except FileNotFoundError:
         pass
 
+    base = os.path.basename(filename)
+
     def test_clauses(clauses):
+        if not clauses or not all(clauses):
+            return False
+        cnf = clauses_to_dimacs(clauses)
         with TemporaryDirectory() as d:
+            working = os.path.join(d, base)
+            with open(working, "w") as o:
+                o.write(cnf)
+
             sp = subprocess.Popen(
-                test,
+                test + [working],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -130,7 +149,9 @@ def main(
                 cwd=d,
             )
             try:
-                sp.communicate(clauses_to_dimacs(clauses), timeout=timeout)
+                sp.communicate(cnf, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                return False
             finally:
                 interrupt_wait_and_kill(sp)
             return sp.returncode == 0
@@ -151,6 +172,7 @@ def main(
         dimacs_to_clauses(initial),
         test_clauses,
         debug=debug,
+        parallelism=parallelism,
     )
 
     @shrinker.on_reduce

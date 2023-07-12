@@ -7,34 +7,38 @@ import satreduce.minisat as ms
 
 
 @st.composite
-def sat_clauses(draw):
-    n_variables = draw(st.integers(1, 10))
+def sat_clauses(draw, min_clause_size=1):
+    n_variables = draw(st.integers(min_clause_size, min(10, min_clause_size * 2)))
     variables = range(1, n_variables + 1)
 
     literal = st.builds(
         operator.mul, st.sampled_from(variables), st.sampled_from((-1, 1))
     )
 
-    return draw(st.lists(st.lists(literal, unique=True, min_size=1), min_size=1))
+    return draw(
+        st.lists(st.lists(literal, unique_by=abs, min_size=min_clause_size), min_size=1)
+    )
 
 
 @st.composite
-def unsatisfiable_clauses(draw):
-    clauses = draw(sat_clauses())
+def unsatisfiable_clauses(draw, min_clause_size=1):
+    clauses = draw(sat_clauses(min_clause_size=min_clause_size))
     assume(clauses)
 
     while True:
         sol = ms.find_solution(clauses)
         if sol is None:
             return clauses
-
-        subset = draw(st.lists(st.sampled_from(sol), min_size=1, unique=True))
+        assert len(sol) >= min_clause_size, (sol, clauses)
+        subset = draw(
+            st.lists(st.sampled_from(sol), min_size=min_clause_size, unique=True)
+        )
         clauses.append([-n for n in subset])
 
 
 @st.composite
 def has_unique_solution(draw):
-    clauses = draw(sat_clauses())
+    clauses = draw(sat_clauses(min_clause_size=2))
     sol = ms.find_solution(clauses)
     assume(sol is not None)
 
@@ -46,7 +50,13 @@ def has_unique_solution(draw):
 
         to_rule_out = sorted(set(other_sol) - set(sol))
         assert to_rule_out
-        subset = draw(st.lists(st.sampled_from(to_rule_out), min_size=1, unique=True))
+        subset = draw(
+            st.lists(
+                st.sampled_from(to_rule_out),
+                min_size=min(2, len(to_rule_out)),
+                unique=True,
+            )
+        )
         clauses.append([-n for n in subset])
 
 

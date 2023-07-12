@@ -6,13 +6,13 @@ from satreduce.dimacscnf import clauses_to_dimacs
 
 
 def is_satisfiable(clauses):
+    if not clauses:
+        return True
     if not all(clauses):
         return False
 
     f, sat_file = tempfile.mkstemp()
     os.close(f)
-
-    n_variables = len({abs(v) for clause in clauses for v in clause})
 
     with open(sat_file, "w") as o:
         o.write(clauses_to_dimacs(clauses))
@@ -27,6 +27,8 @@ def is_satisfiable(clauses):
 
 
 def find_solution(clauses):
+    if not clauses:
+        return []
     if not all(clauses):
         return None
 
@@ -35,8 +37,6 @@ def find_solution(clauses):
 
     f, out_file = tempfile.mkstemp()
     os.close(f)
-
-    n_variables = len({abs(v) for clause in clauses for v in clause})
 
     with open(sat_file, "w") as o:
         o.write(clauses_to_dimacs(clauses))
